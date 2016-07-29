@@ -20,53 +20,54 @@ import RNCalendarEvents from 'react-native-calendar-events';
 
 const {NativeAppEventEmitter} = React;
 
+const API_URL = "https://scorpio-backend.herokuapp.com"
+
 var ContactLibrary = require('react-native-contacts');
-var CalendarManager = NativeModules.CalendarManager;
+// var CalendarManager = NativeModules.CalendarManager;
 
-// var Conversations = React.createClass({
-//   getInitialState () {
-//     const ds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
-//     fetch('https://scorpio-backend.herokuapp.com/conversations', {
-//       method: 'GET'
-//       // body: JSON.stringify({
-//       // username: username,
-//       // password: password,
-//       // }),
-//       // headers: {
-//       //  "content-type": "application/json"
-//       // }H
-//     })
-//   }
-// })
-
+// `Conversations`
+// 
+// page that lists all Conversations
+// 
 var Conversations = React.createClass({
   getInitialState() {
-    const ds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
+    return {
+      dataSource: new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2})
+    }
+  },
+  
+  componentDidMount() {
+    const ds = this.state.dataSource;
+    console.log('calling fetch');
     fetch('https://scorpio-backend.herokuapp.com/conversations', {
       method: 'GET',
     })
     .then((response) => {
+      console.log('got response');
       return response.json()
     })
     .then((responseJson) => {
-      console.log(responseJson)
+      console.log("this is the fuck", responseJson.convos);
       this.setState ({
-        dataSource: ds.cloneWithRows(responseJson.conversations)
+        dataSource: ds.cloneWithRows(responseJson.convos)
       });
     })
     .catch((err) => {
-      console.log(err)
+      console.log('error:', err)
     })
     return {
       dataSource: ds.cloneWithRows([])
     };
   },
+  
   touch (convo) {
-    fetch ('http://localhost:3000/content/' + convo._id, {
+    console.log("Calling fetch");
+    fetch (API_URL + '/content/' + convo._id, {
       method: 'GET'
     })
     .then((response) => response.json())
     .then((responseJson) => {
+      console.log("Got: ", responseJson);
       if (responseJson.success) {
         // go to specific convo page
         // give it the data
@@ -78,46 +79,65 @@ var Conversations = React.createClass({
         })
       }
     })
+    .catch(err => console.error(err));
   },
   render () {
-    return <ListView
+    return (<ListView
       dataSource={this.state.dataSource}
-      renderRow={(convo) => <TouchableOpacity onPress={this.touch.bind(this, convo)}><Text>{convo.contact} {convo.date}</Text></TouchableOpacity>}
-      // renderRow={(rowData) => <Text>{rowData.username}</Text>}
-    />
+      renderRow={(convo) => <TouchableOpacity onPress={this.touch.bind(this, convo)}><Text>{convo.transcription.join("\n")}</Text></TouchableOpacity>}
+    />)
   }
 });
 
 var Content = React.createClass({
+  componentDidMount() {
+    // console.log("Mounted new component with props:", this.props);
+    console.log("Mounted Content with convo:", this.props.route.convo);
+    this.setState({
+      proposedEvents: this.state.proposedEvents.cloneWithRows(this.props.route.convo.calendar)
+    })
+  },
+  
   getInitialState() {
     const ds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
+    // console.log("Convo:", this.props.convo);
     return {
-      proposedEvents: ds.cloneWithRows(this.props.convo.proposedEvents)
+      // proposedEvents: ds.cloneWithRows(this.props.convo.calendar)
+      proposedEvents: ds
     }
   },
+  
   press (evt) {
     RNCalendarEvents.saveEvent(evt.title, {
       location: 'location',
       notes: 'note',
-      startDate: evt.start,
-      endDate: evt.end
+      startDate: evt.startTime,
+      endDate: evt.endTime
     });
   },
   render () {
     return (
-      <View>
-        <Text>this.props.convo.transcription</Text>
-        <Text>this.props.convo.name</Text>
-        <Text>this.props.convo.age</Text>
+      // <View>
+      //   <Text>this.props.convo.transcription</Text>
+      //   <Text>this.props.convo.name</Text>
+      //   <Text>this.props.convo.age</Text>
         <ListView
           dataSource={this.state.proposedEvents}
-          renderRow={(event) => <TouchableOpacity onPress{this.press.bind(this, event)}><Text>{event.title}</Text></TouchableOpacity>}
+          renderRow={(event) => {
+            console.log("Rendering event:", event);
+            return <TouchableOpacity onPress={this.press.bind(this, event)}><Text>{event.description}</Text></TouchableOpacity>
+            // return <Text>{event.description}</Text>
+          }}
         />
-      </View>
+      // </View>
     )
   }
 });
 
+
+// `Contacts`
+// 
+// Page that lists all contacts
 var Contacts = React.createClass({
   getInitialState() {
     const ds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
@@ -156,12 +176,19 @@ var Contacts = React.createClass({
   },
   press (contact) {
     console.log("Sending call")
-    fetch('https://b708783f.ngrok.io/call',
-    {
+    Alert.alert("Sending call to: " + contact.givenName)
+    console.log("contact obj", contact)
+    fetch(API_URL + '/call',{
       method: 'POST',
       body: JSON.stringify({
-        from: contact.phoneNumbers[0].number
-      })
+        // to: contact.phoneNumbers[0].number,
+        to: '+19703710485',
+        from: '+12489100348'
+      }),
+      headers: {
+        "Content-Type": "application/json"
+      },
+      json: true
     })
     .then((resp) => console.log)
     .catch((resp) => console.log)
@@ -191,9 +218,15 @@ var scorpioClient = React.createClass({
 });
 
 var Register = React.createClass({
+  getInitialState() {
+    return {
+      username: '',
+      password: ''
+    }
+  },
   press() {
     console.log("Sending something");
-    fetch('http://localhost:3000/register', {
+    fetch(API_URL + '/register', {
       method: 'POST',
       body: JSON.stringify({
         username: this.state.username,
@@ -203,16 +236,16 @@ var Register = React.createClass({
         "content-type": "application/json"
       }
     })
-  .then((response) => response.json())
-  .then((responseJson) => {
-    console.log("Success: ", responseJson)
-  /* Upon success, go to login */
+    .then((response) => response.json())
+    .then((responseJson) => {
+      console.log("Success: ", responseJson)
+      /* Upon success, go to login */
       if (responseJson.success) {
         this.props.navigator.pop()
       }
     })
-  .catch((err) => {
-  /* do something if there was an error with fetching */
+    .catch((err) => {
+      /* do something if there was an error with fetching */
       console.log(err);
     });
   },
@@ -239,8 +272,14 @@ var Register = React.createClass({
 });
 
 var Login = React.createClass({
+  getInitialState() {
+    return {
+      username: '',
+      username: ''
+    }
+  },
   press() {
-    fetch('http://localhost:3000/login', {
+    fetch(API_URL + '/login', {
       method: 'POST',
       body: JSON.stringify({
         username: this.state.username,
@@ -340,7 +379,7 @@ const styles = StyleSheet.create({
     marginRight: 20,
     backgroundColor: 'white',
     borderRadius: 10,
-    color: 'white'
+    color: '#FFFFFF'
   },
   button: {
     alignSelf: 'stretch', 
@@ -356,16 +395,14 @@ const styles = StyleSheet.create({
   },
   buttonGreen: {
     backgroundColor: '#003366',
-    color: 'white'
   },
   buttonBlue: {
     backgroundColor: '#001B36',
-    color: 'white'
   },
   buttonLabel: {
     textAlign: 'center',
     fontSize: 16,
-    color: 'white'
+    color: '#FFFFFF'
   }
 });
 
